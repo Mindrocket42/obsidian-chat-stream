@@ -55,11 +55,6 @@ export const CHAT_MODELS = {
 		name: 'gpt-4-32k-0613',
 		tokenLimit: 32768
 	},
-	MANUAL_PROCESSING: {
-		name: 'manual-processing',
-		tokenLimit: 100000,
-		encodingFrom: 'gpt-4'
-	},
 	O3_MINI_HIGH: {
 		name: 'o3-mini-high',
 		tokenLimit: 200000
