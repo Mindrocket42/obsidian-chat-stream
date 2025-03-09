@@ -39,10 +39,6 @@ export const CHAT_MODELS = {
 		name: 'gpt-4-turbo-preview',
 		tokenLimit: 128000
 	},
-	GPT_45_PREVIEW: {
-		name: 'gpt-4.5-preview',
-		tokenLimit: 128000
-	},
 	GPT_4_0125_PREVIEW: {
 		name: 'gpt-4-0125-preview',
 		tokenLimit: 128000
@@ -54,11 +50,6 @@ export const CHAT_MODELS = {
 	GPT_4_32K_0613: {
 		name: 'gpt-4-32k-0613',
 		tokenLimit: 32768
-	},
-	MANUAL_PROCESSING: {
-		name: 'manual-processing',
-		tokenLimit: 100000,
-		encodingFrom: 'gpt-4'
 	},
 	O3_MINI_HIGH: {
 		name: 'o3-mini-high',
