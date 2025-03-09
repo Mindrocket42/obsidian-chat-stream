@@ -1,7 +1,12 @@
 import { request, RequestUrlParam } from 'obsidian'
 import { openai } from './chatGPT-types'
 
-export const OPENAI_COMPLETIONS_URL = `https://api.openai.com/v1/chat/completions`
+export const DEFAULT_OPENAI_COMPLETIONS_URL = `https://api.openai.com/v1/chat/completions`
+export const OPENAI_COMPLETIONS_URL = DEFAULT_OPENAI_COMPLETIONS_URL
+
+export const getOpenAICompletionsURL = (configuredUrl?: string): string => {
+	return configuredUrl || DEFAULT_OPENAI_COMPLETIONS_URL
+}
 
 export type ChatModelSettings = {
 	name: string,
@@ -77,8 +82,12 @@ export const CHAT_MODELS = {
 		tokenLimit: 128000
 	},
 	CHATGPT_4O_LATEST: {
-		name: 'chatgpt-4o-latest',
+		name: 'gpt-4o-latest',
 		tokenLimit: 128000
+	},
+	CUSTOMIZE: {
+		name: 'customize',
+		tokenLimit: Infinity
 	}
 }
 
@@ -108,19 +117,23 @@ export function getChatGPTCompletion(
 	messages: openai.CreateChatCompletionRequest['messages'],
 	settings?: Partial<
 		Omit<openai.CreateChatCompletionRequest, 'messages' | 'model'>
-	>
+	>,
+	customModelName?: string
 ): Promise<string | undefined> {
 	const headers = {
 		Authorization: `Bearer ${apiKey}`,
 		'Content-Type': 'application/json'
 	}
+	const actualModel = model === CHAT_MODELS.CUSTOMIZE.name && customModelName
+		? customModelName
+		: (model ?? CHAT_MODELS.GPT_35_TURBO.name)
 	const body: openai.CreateChatCompletionRequest = {
 		messages,
-		model,
+		model: actualModel,
 		...settings
 	}
 	const requestParam: RequestUrlParam = {
-		url: apiUrl,
+		url: getOpenAICompletionsURL(apiUrl),
 		method: 'POST',
 		contentType: 'application/json',
 		body: JSON.stringify(body),

@@ -4,7 +4,6 @@ import { CanvasNode } from './obsidian/canvas-internal'
 import { CanvasView, calcHeight, createNode } from './obsidian/canvas-patches'
 import {
 	CHAT_MODELS,
-	ChatGPTModel,
 	chatModelByName,
 	ChatModelSettings,
 	getChatGPTCompletion
@@ -15,7 +14,7 @@ import {
 	DEFAULT_SETTINGS
 } from './settings/ChatStreamSettings'
 import { Logger } from './util/logging'
-import { visitNodeAndAncestors } from './obsidian/canvasUtil'
+import { HasId, visitNodeAndAncestors } from './obsidian/canvasUtil'
 import { readNodeContent } from './obsidian/fileUtil'
 
 /**
@@ -91,21 +90,22 @@ export function noteGenerator(
 	const getSystemPrompt = async (node: CanvasNode) => {
 		let foundPrompt: string | null = null
 
-		await visitNodeAndAncestors(node, async (n: CanvasNode) => {
-			const text = await readNodeContent(n)
+		await visitNodeAndAncestors(node, async (n: HasId, depth: number) => {
+			const canvasNode = n as unknown as CanvasNode
+			const text = await readNodeContent(canvasNode)
 			if (text && isSystemPromptNode(text)) {
 				foundPrompt = text
 				return false
-			} else {
-				return true
 			}
+			return true
 		})
 
 		return foundPrompt || settings.systemPrompt
 	}
 
 	const buildMessages = async (node: CanvasNode) => {
-		const encoding = getEncoding(settings)
+		const isCustomModel = settings.apiModel === CHAT_MODELS.CUSTOMIZE.name
+		const encoding = isCustomModel ? null : getEncoding(settings)
 
 		const messages: openai.ChatCompletionRequestMessage[] = []
 		let tokenCount = 0
@@ -114,15 +114,22 @@ export function noteGenerator(
 		// That scenario makes no sense, though.
 		const systemPrompt = await getSystemPrompt(node)
 		if (systemPrompt) {
-			tokenCount += encoding.encode(systemPrompt).length
+			if (!isCustomModel && encoding) {
+				tokenCount += encoding.encode(systemPrompt).length
+			}
+			messages.push({
+				role: 'system',
+				content: systemPrompt
+			})
 		}
 
-		const visit = async (node: CanvasNode, depth: number) => {
+		const visit = async (node: HasId, depth: number) => {
 			if (settings.maxDepth && depth > settings.maxDepth) return false
 
-			const nodeData = node.getData()
-			let nodeText = (await readNodeContent(node))?.trim() || ''
-			const inputLimit = getTokenLimit(settings)
+			const canvasNode = node as unknown as CanvasNode
+			const nodeData = canvasNode.getData()
+			let nodeText = (await readNodeContent(canvasNode))?.trim() || ''
+			const inputLimit = isCustomModel ? Infinity : getTokenLimit(settings)
 
 			let shouldContinue = true
 			if (!nodeText) {
@@ -140,27 +147,34 @@ export function noteGenerator(
 			} else {
 				if (isSystemPromptNode(nodeText)) return true
 
-				let nodeTokens = encoding.encode(nodeText)
+				const nodeTokens = isCustomModel || !encoding ? null : encoding.encode(nodeText)
 				let keptNodeTokens: number
 
-				if (tokenCount + nodeTokens.length > inputLimit) {
+				if (!isCustomModel && nodeTokens && tokenCount + nodeTokens.length > inputLimit) {
 					// will exceed input limit
 
 					shouldContinue = false
 
 					// Leaving one token margin, just in case
-					const keepTokens = nodeTokens.slice(0, inputLimit - tokenCount - 1)
-					const truncateTextTo = encoding.decode(keepTokens).length
-					logDebug(
-						`Truncating node text from ${nodeText.length} to ${truncateTextTo} characters`
+					const keepTokens = Math.max(
+						0,
+						inputLimit - tokenCount - 1
 					)
-					nodeText = nodeText.slice(0, truncateTextTo)
-					keptNodeTokens = keepTokens.length
+
+					if (encoding) {
+						const keepBytes = encoding
+							.decode(nodeTokens.slice(0, keepTokens))
+							.length
+						nodeText = nodeText.slice(0, keepBytes)
+					}
+					keptNodeTokens = keepTokens
 				} else {
-					keptNodeTokens = nodeTokens.length
+					keptNodeTokens = nodeTokens?.length || 0
 				}
 
-				tokenCount += keptNodeTokens
+				if (!isCustomModel) {
+					tokenCount += keptNodeTokens
+				}
 
 				const role: openai.ChatCompletionRequestMessageRoleEnum =
 					nodeData.chat_role === 'assistant' ? 'assistant' : 'user'
@@ -242,9 +256,10 @@ export function noteGenerator(
 					settings.apiModel,
 					messages,
 					{
-						max_tokens: settings.maxResponseTokens || undefined,
-						temperature: settings.temperature
-					}
+						temperature: settings.temperature,
+						max_tokens: settings.maxResponseTokens || undefined
+					},
+					settings.customModelName
 				)
 
 				if (generated == null) {
@@ -274,8 +289,8 @@ export function noteGenerator(
 					// If the user has not changed selection, select the created node
 					canvas.selectOnly(created, false /* startEditing */)
 				}
-			} catch (error) {
-				new Notice(`Error calling GPT: ${error.message || error}`)
+			} catch (error: unknown) {
+				new Notice(`Error calling GPT: ${(error as Error).message || String(error)}`)
 				canvas.removeNode(created)
 			}
 
@@ -287,6 +302,9 @@ export function noteGenerator(
 }
 
 function getEncoding(settings: ChatStreamSettings) {
+	if (settings.apiModel === CHAT_MODELS.CUSTOMIZE.name) {
+		return null
+	}
 	const model: ChatModelSettings | undefined = chatModelByName(settings.apiModel)
 	return encodingForModel(
 		(model?.encodingFrom || model?.name || DEFAULT_SETTINGS.apiModel) as TiktokenModel
@@ -294,6 +312,9 @@ function getEncoding(settings: ChatStreamSettings) {
 }
 
 function getTokenLimit(settings: ChatStreamSettings) {
+	if (settings.apiModel === CHAT_MODELS.CUSTOMIZE.name) {
+		return Infinity
+	}
 	const model = chatModelByName(settings.apiModel) || CHAT_MODELS.GPT_35_TURBO_0125
 	return settings.maxInputTokens
 		? Math.min(settings.maxInputTokens, model.tokenLimit)

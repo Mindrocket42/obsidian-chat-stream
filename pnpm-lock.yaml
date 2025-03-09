@@ -7,10 +7,6 @@ settings:
 importers:
 
   .:
-    dependencies:
-      js-tiktoken:
-        specifier: ^1.0.12
-        version: 1.0.19
     devDependencies:
       '@jest/globals':
         specifier: ^29.7.0
@@ -39,6 +35,9 @@ importers:
       jest:
         specifier: ^29.7.0
         version: 29.7.0(@types/node@16.18.126)
+      js-tiktoken:
+        specifier: ^1.0.19
+        version: 1.0.19
       obsidian:
         specifier: ^1.4.11
         version: 1.8.7(@codemirror/state@6.5.2)(@codemirror/view@6.36.4)

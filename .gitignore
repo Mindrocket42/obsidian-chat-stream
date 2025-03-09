@@ -10,6 +10,10 @@
 
 # npm
 node_modules
+npm-debug.log
+yarn-error.log
+yarn-debug.log
+.pnpm-debug.log
 
 # Don't include the compiled main.js file in the repo.
 # They should be uploaded to GitHub releases instead.
@@ -23,3 +27,24 @@ data.json
 
 # Exclude macOS Finder (System Explorer) View States
 .DS_Store
+
+# History files
+.history/
+
+# Build output
+dist/
+build/
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# Logs
+logs
+*.log
